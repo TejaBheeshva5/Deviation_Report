@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>COD SPOC Revenue Dashboard — System Revenue Forward</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #F5F7FA;
+    --panel: #FFFFFF;
+    --ink: #16202B;
+    --ink-soft: #5C6B7A;
+    --line: #E2E8F0;
+    --system: #2451B8;     /* System Revenue = the forward/base dataset */
+    --system-soft: #E7EEFC;
+    --drr: #C8790E;        /* DRR Revenue = the mapped-against dataset */
+    --drr-soft: #FBEFDD;
+    --good: #1C8A5E;
+    --bad: #C4432B;
+    --unmapped: #94A3B8;
+    --radius: 10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding:32px 24px 80px;}
+
+  header.top{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    gap:24px; margin-bottom:28px; flex-wrap:wrap;
+  }
+  .titleblock h1{
+    font-family:'Space Grotesk',sans-serif; font-size:26px; font-weight:700;
+    margin:0 0 6px; letter-spacing:-0.01em;
+  }
+  .titleblock .sub{color:var(--ink-soft); font-size:13.5px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+  .flow-tag{
+    display:inline-flex; align-items:center; gap:6px;
+    background:var(--system-soft); color:var(--system);
+    border:1px solid #C7D7F5; padding:3px 10px; border-radius:999px;
+    font-size:12px; font-weight:600; font-family:'JetBrains Mono',monospace;
+  }
+  .flow-tag .arrow{color:var(--drr);}
+
+  .uploads{display:flex; gap:10px; flex-wrap:wrap;}
+  .up-btn{
+    display:flex; flex-direction:column; gap:2px;
+    border:1.5px dashed var(--line); border-radius:var(--radius);
+    padding:10px 14px; background:var(--panel); cursor:pointer;
+    min-width:190px; transition:border-color .15s;
+  }
+  .up-btn:hover{border-color:var(--system);}
+  .up-btn.filled{border-style:solid;}
+  .up-btn.system.filled{border-color:var(--system); background:var(--system-soft);}
+  .up-btn.drr.filled{border-color:var(--drr); background:var(--drr-soft);}
+  .up-btn .label{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft);}
+  .up-btn.system .label{color:var(--system);}
+  .up-btn.drr .label{color:var(--drr);}
+  .up-btn .fname{font-size:12.5px; color:var(--ink); font-family:'JetBrains Mono',monospace;}
+  .up-btn input{display:none;}
+
+  .status-bar{
+    font-size:12.5px; color:var(--ink-soft); margin:-6px 0 22px;
+    display:flex; gap:8px; align-items:center;
+  }
+  .status-dot{width:7px; height:7px; border-radius:50%; background:var(--unmapped);}
+  .status-dot.ready{background:var(--good);}
+
+  .kpis{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:26px;
+  }
+  @media(max-width:860px){ .kpis{grid-template-columns:repeat(2,1fr);} }
+  .kpi{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:16px 18px;
+  }
+  .kpi .k-label{font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); font-weight:600;}
+  .kpi .k-value{font-family:'Space Grotesk',sans-serif; font-size:25px; font-weight:700; margin:6px 0 2px;}
+  .kpi .k-note{font-size:12px; color:var(--ink-soft);}
+  .kpi.system{border-top:3px solid var(--system);}
+  .kpi.drr{border-top:3px solid var(--drr);}
+  .kpi.dev .k-value.band-red{color:var(--bad);}
+  .kpi.dev .k-value.band-green{color:var(--good);}
+
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    margin-bottom:22px; overflow:hidden;
+  }
+  .panel-head{
+    padding:16px 20px 12px; display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;
+    border-bottom:1px solid var(--line);
+  }
+  .panel-head h2{font-family:'Space Grotesk',sans-serif; font-size:16px; margin:0;}
+  .panel-head .hint{font-size:12px; color:var(--ink-soft);}
+
+  table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  thead th{
+    text-align:left; padding:10px 20px; font-size:11px; text-transform:uppercase;
+    letter-spacing:.04em; color:var(--ink-soft); border-bottom:1px solid var(--line); font-weight:700;
+  }
+  thead th.num, td.num{text-align:right;}
+  tbody td{padding:10px 20px; border-bottom:1px solid #F0F3F7;}
+  tbody tr.spoc-row{cursor:pointer;}
+  tbody tr.spoc-row:hover{background:#FAFBFD;}
+  tbody tr.spoc-row td{font-weight:600;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .dev-band-red{color:var(--bad); font-weight:700;}
+  .dev-band-green{color:var(--good); font-weight:700;}
+  .caret{display:inline-block; transition:transform .15s; margin-right:8px; color:var(--ink-soft); font-size:11px;}
+  tr.open .caret{transform:rotate(90deg);}
+  tr.detail-row{display:none;}
+  tr.detail-row.open{display:table-row;}
+  tr.detail-row td{padding:0; border-bottom:1px solid #F0F3F7;}
+  .detail-inner{padding:6px 20px 14px 40px; background:#FAFBFD;}
+  .detail-inner table{font-size:12.5px;}
+  .detail-inner thead th{padding:6px 12px; border-bottom:1px solid var(--line);}
+  .detail-inner tbody td{padding:6px 12px; border-bottom:1px dashed #E8ECF1;}
+  .badge{
+    font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:5px; letter-spacing:.02em;
+  }
+  .badge.unmapped{background:#F1F3F6; color:var(--unmapped); border:1px solid #DDE3EA;}
+
+  .charts{display:grid; grid-template-columns:1.3fr 1fr; gap:16px;}
+  @media(max-width:900px){ .charts{grid-template-columns:1fr;} }
+  .chart-box{padding:16px 20px 20px;}
+  canvas{max-height:320px;}
+
+  .empty{padding:50px 20px; text-align:center; color:var(--ink-soft); font-size:14px;}
+  .empty .big{font-size:34px; margin-bottom:6px;}
+
+  footer.note{font-size:12px; color:var(--ink-soft); text-align:center; margin-top:10px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="titleblock">
+      <h1>COD SPOC Revenue Dashboard</h1>
+      <div class="sub">
+        <span class="flow-tag">System Revenue <span class="arrow">→</span> DRR Revenue</span>
+        <span>System Revenue = Ads_Revenue + budget_spent (Video), mapping driven from there</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="panel" id="gsheetPanel">
+    <div class="panel-head">
+      <h2>Load from Google Sheets (via backend)</h2>
+      <span class="hint">Uses a small Apps Script backend — your Google account, not the viewer's, reads the sheets</span>
+    </div>
+    <div style="padding:16px 20px; display:flex; flex-direction:column; gap:10px;">
+      <div style="background:var(--system-soft); border:1px solid #C7D7F5; border-radius:8px; padding:10px 14px; font-size:12px; color:var(--ink); line-height:1.5;">
+        This dashboard talks to <strong>one backend URL</strong> (an Apps Script Web App you deploy once) instead of Google Sheets directly. The backend reads System Revenue, Video Revenue, and DRR Revenue using your own access and hands back plain JSON — so people opening this dashboard never need Google Sheets access or sign-in at all. See <code>SETUP.md</code> for the one-time deployment steps.
+      </div>
+      <div style="display:grid; grid-template-columns:150px 1fr; gap:10px; align-items:center;">
+        <label style="font-size:12.5px; font-weight:600; color:var(--system);">Backend URL</label>
+        <input type="text" id="backendUrl" placeholder="https://script.google.com/macros/s/AKfycb.../exec" style="padding:8px 10px; border:1px solid var(--line); border-radius:6px; font-size:12.5px; font-family:'JetBrains Mono',monospace;">
+      </div>
+      <div style="display:flex; align-items:center; gap:12px; margin-top:4px;">
+        <button id="loadSheetsBtn" style="padding:9px 18px; border:none; border-radius:7px; background:var(--system); color:#fff; font-weight:600; font-size:13px; cursor:pointer;">Load Data</button>
+        <span id="gsheetStatus" style="font-size:12.5px; color:var(--ink-soft);">Paste your Apps Script Web App URL, then click Load Data.</span>
+      </div>
+
+    </div>
+  </div>
+
+  <details style="margin-bottom:22px;">
+    <summary style="cursor:pointer; font-size:13px; font-weight:600; color:var(--ink-soft); padding:4px 0;">…or upload CSV files manually instead</summary>
+    <div class="uploads" style="margin-top:10px;">
+      <label class="up-btn system" id="sysBtn">
+        <span class="label">① System Revenue CSV</span>
+        <span class="fname" id="sysName">Uses Ads_Revenue column</span>
+        <input type="file" accept=".csv" id="sysFile">
+      </label>
+      <label class="up-btn system" id="videoBtn">
+        <span class="label">② Video Revenue CSV</span>
+        <span class="fname" id="videoName">Uses budget_spent column</span>
+        <input type="file" accept=".csv" id="videoFile">
+      </label>
+      <label class="up-btn drr" id="drrBtn">
+        <span class="label">③ DRR Revenue CSV</span>
+        <span class="fname" id="drrName">Uses Total Budget Delivery · Product List = 1P only</span>
+        <input type="file" accept=".csv" id="drrFile">
+      </label>
+    </div>
+  </details>
+
+  <div class="status-bar"><span class="status-dot" id="statusDot"></span><span id="statusText">Upload all three sheets to begin</span></div>
+
+  <div class="panel" id="diagPanel" style="display:none;">
+    <div class="panel-head">
+      <h2>Data Quality Check</h2>
+      <span class="hint">If totals look inflated, this shows exactly which sheet it's coming from</span>
+    </div>
+
+    <div style="padding:14px 20px 6px; border-bottom:1px solid var(--line);">
+      <div style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--system); margin-bottom:8px;">System Revenue (Ads_Revenue)</div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; font-size:12.5px; margin-bottom:10px;">
+        <div><div style="color:var(--ink-soft); font-size:11px; text-transform:uppercase;">Raw rows</div><div class="mono" id="diagSysRaw" style="font-size:15px; font-weight:700;">—</div></div>
+        <div><div style="color:var(--ink-soft); font-size:11px; text-transform:uppercase;">Duplicates removed</div><div class="mono" id="diagSysDupes" style="font-size:15px; font-weight:700;">—</div></div>
+        <div><div style="color:var(--ink-soft); font-size:11px; text-transform:uppercase;">Sum of Ads_Revenue</div><div class="mono" id="diagSysTotal" style="font-size:15px; font-weight:700;">—</div></div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding-bottom:12px;">
+        <label style="font-size:12px; color:var(--ink-soft);">De-duplicate by:</label>
+        <select id="dedupeColSystem" style="padding:5px 9px; border-radius:6px; border:1px solid var(--line); font-size:12px; font-family:'JetBrains Mono',monospace;">
+          <option value="">None (sum every row)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="padding:14px 20px 6px; border-bottom:1px solid var(--line);">
+      <div style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--system); margin-bottom:8px;">Video Revenue (budget_spent)</div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; font-size:12.5px; margin-bottom:10px;">
+        <div><div style="color:var(--ink-soft); font-size:11px; text-transform:uppercase;">Raw rows</div><div class="mono" id="diagVideoRaw" style="font-size:15px; font-weight:700;">—</div></div>
+        <div><div style="color:var(--ink-soft); font-size:11px; text-transform:uppercase;">Duplicates removed</div><div class="mono" id="diagVideoDupes" style="font-size:15px; font-weight:700;">—</div></div>
+        <div><div style="color:var(--ink-soft); font-size:11px; text-transform:uppercase;">Sum of budget_spent</div><div class="mono" id="diagVideoTotal" style="font-size:15px; font-weight:700;">—</div></div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding-bottom:12px;">
+        <label style="font-size:12px; color:var(--ink-soft);">De-duplicate by:</label>
+        <select id="dedupeColVideo" style="padding:5px 9px; border-radius:6px; border:1px solid var(--line); font-size:12px; font-family:'JetBrains Mono',monospace;">
+          <option value="">None (sum every row)</option>
+        </select>
+        <span style="font-size:11.5px; color:var(--ink-soft);">e.g. Campaign ID — if the same campaign total repeats across creative/placement rows</span>
+      </div>
+    </div>
+
+    <div style="padding:14px 20px 6px; border-bottom:1px solid var(--line);">
+      <div style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--drr); margin-bottom:8px;">Combined System Revenue</div>
+      <div style="font-size:20px; font-weight:700; font-family:'JetBrains Mono',monospace;" id="diagCombinedTotal">—</div>
+      <div style="font-size:11.5px; color:var(--ink-soft); padding-bottom:12px;">Sum of Ads_Revenue + budget_spent, before advertiser-level de-duplication in the mapping step</div>
+    </div>
+
+    <div style="padding:14px 20px 6px;">
+      <div style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--drr); margin-bottom:8px;">DRR Revenue (Total Budget Delivery, 1P only)</div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; font-size:12.5px; margin-bottom:10px;">
+        <div><div style="color:var(--ink-soft); font-size:11px; text-transform:uppercase;">Raw rows</div><div class="mono" id="diagDrrRaw" style="font-size:15px; font-weight:700;">—</div></div>
+        <div><div style="color:var(--ink-soft); font-size:11px; text-transform:uppercase;">Duplicates removed</div><div class="mono" id="diagDrrDupes" style="font-size:15px; font-weight:700;">—</div></div>
+        <div><div style="color:var(--ink-soft); font-size:11px; text-transform:uppercase;">After Product List = 1P</div><div class="mono" id="diagDrr1p" style="font-size:15px; font-weight:700;">—</div></div>
+        <div><div style="color:var(--ink-soft); font-size:11px; text-transform:uppercase;">Unique advertisers (1P)</div><div class="mono" id="diagDrrAdv" style="font-size:15px; font-weight:700;">—</div></div>
+        <div><div style="color:var(--ink-soft); font-size:11px; text-transform:uppercase;">Sum of Total Budget Delivery</div><div class="mono" id="diagDrrTotal" style="font-size:15px; font-weight:700;">—</div></div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding-bottom:16px;">
+        <label style="font-size:12px; color:var(--ink-soft);">De-duplicate by:</label>
+        <select id="dedupeColDrr" style="padding:5px 9px; border-radius:6px; border:1px solid var(--line); font-size:12px; font-family:'JetBrains Mono',monospace;">
+          <option value="">None (sum every row)</option>
+        </select>
+        <span style="font-size:11.5px; color:var(--ink-soft);">e.g. Campaign ID / Order ID</span>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="kpis">
+    <div class="kpi system">
+      <div class="k-label">Total System Revenue</div>
+      <div class="k-value" id="kSystem">—</div>
+      <div class="k-note">Ads_Revenue + budget_spent (Video), by advertiser</div>
+    </div>
+    <div class="kpi drr">
+      <div class="k-label">Total DRR Revenue (Mapped)</div>
+      <div class="k-value" id="kDrr">—</div>
+      <div class="k-note">Total Budget Delivery, Product List = 1P, matched to System</div>
+    </div>
+    <div class="kpi dev">
+      <div class="k-label">Overall Deviation</div>
+      <div class="k-value" id="kDev">—</div>
+      <div class="k-note">(DRR − System) / System, on mapped rows</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label">Advertisers Mapped</div>
+      <div class="k-value" id="kMapped">—</div>
+      <div class="k-note">Unique System advertisers matched to a DRR row</div>
+    </div>
+  </div>
+
+  <div class="panel" id="tablePanel">
+    <div class="panel-head">
+      <h2>SPOC-wise Breakdown</h2>
+      <span class="hint">Click a row to expand advertiser detail · SPOC grouping sourced from COD_SPOC on the DRR sheet</span>
+    </div>
+    <div id="tableHost">
+      <div class="empty"><div class="big">⬆</div>Upload both sheets to begin<br><span style="font-size:12px">System Revenue and DRR Data CSVs required</span></div>
+    </div>
+  </div>
+
+  <div class="panel" id="unmappedPanel" style="display:none;">
+    <div class="panel-head">
+      <h2>In DRR but not in System</h2>
+      <span class="hint">Advertisers present in DRR Data with no matching System Revenue row — excluded from KPIs above since mapping runs System → DRR</span>
+    </div>
+    <div id="unmappedHost"></div>
+  </div>
+
+  <div class="panel charts" id="chartsPanel" style="display:none;">
+    <div class="chart-box">
+      <h2 style="font-family:'Space Grotesk',sans-serif; font-size:15px; margin:0 0 4px;">Revenue by SPOC</h2>
+      <div class="hint" style="font-size:12px; color:var(--ink-soft); margin-bottom:8px;">System (solid) vs DRR (outline)</div>
+      <div id="revChart"></div>
+    </div>
+    <div class="chart-box">
+      <h2 style="font-family:'Space Grotesk',sans-serif; font-size:15px; margin:0 0 4px;">Deviation % by SPOC</h2>
+      <div class="hint" style="font-size:12px; color:var(--ink-soft); margin-bottom:8px;">Green: within ±15% · Red: outside ±15%</div>
+      <div id="devChart"></div>
+    </div>
+  </div>
+
+  <div class="panel charts" id="chartsPanelAdv" style="display:none;">
+    <div class="chart-box">
+      <h2 style="font-family:'Space Grotesk',sans-serif; font-size:15px; margin:0 0 4px;">Revenue by Advertiser</h2>
+      <div class="hint" style="font-size:12px; color:var(--ink-soft); margin-bottom:8px;">System (solid) vs DRR (outline) · top 20 by System Revenue</div>
+      <div id="revChartAdv"></div>
+    </div>
+    <div class="chart-box">
+      <h2 style="font-family:'Space Grotesk',sans-serif; font-size:15px; margin:0 0 4px;">Deviation % by Advertiser</h2>
+      <div class="hint" style="font-size:12px; color:var(--ink-soft); margin-bottom:8px;">Green: within ±15% · Red: outside ±15% · top 20 by System Revenue</div>
+      <div id="devChartAdv"></div>
+    </div>
+  </div>
+
+
+  <footer class="note">System Revenue sheet → <code>advertiser_name</code> + <code>Ads_Revenue</code>. DRR Revenue sheet → <code>Advertiser Name(Ad Manager)</code> + <code>Total Budget Delivery</code>, filtered to <code>Product List = 1P</code>. Matched by advertiser name. SPOC-wise breakdown is grouped using the <code>COD_SPOC</code> column from the DRR sheet.</footer>
+</div>
+
+<script>
+let systemRows = null, drrRows = null;
+
+
+const fmtMoney = n => {
+  if (!isFinite(n)) return '—';
+  const abs = Math.abs(n);
+  const s = abs >= 10000000 ? (n/10000000).toFixed(2)+' Cr'
+          : abs >= 100000 ? (n/100000).toFixed(2)+' L'
+          : n.toLocaleString('en-IN', {maximumFractionDigits:0});
+  return '₹' + s;
+};
+const fmtPct = n => (isFinite(n) ? (n>0?'+':'') + n.toFixed(1) + '%' : '—');
+
+// Deviation highlight rule: within -15% to +15% => green, outside that band => red.
+function devBand(dev){
+  if (!isFinite(dev)) return '';
+  return (dev >= -15 && dev <= 15) ? 'green' : 'red';
+}
+
+function parseCSV(text){
+  // simple RFC4180-ish CSV parser (handles quoted fields with commas)
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i=0;i<text.length;i++){
+    const c = text[i], n = text[i+1];
+    if (inQuotes){
+      if (c === '"' && n === '"'){ field+='"'; i++; }
+      else if (c === '"'){ inQuotes = false; }
+      else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ','){ row.push(field); field=''; }
+      else if (c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else if (c === '\r'){ /* skip */ }
+      else field += c;
+    }
+  }
+  if (field.length || row.length){ row.push(field); rows.push(row); }
+  const filtered = rows.filter(r => r.some(c => c.trim() !== ''));
+  if (!filtered.length) return [];
+  const headers = filtered[0].map(h => h.trim());
+  return filtered.slice(1).map(r => {
+    const obj = {};
+    headers.forEach((h,idx) => obj[h] = (r[idx] ?? '').trim());
+    return obj;
+  });
+}
+
+function dedupeExactRows(raw){
+  const seen = new Set();
+  const out = [];
+  let removed = 0;
+  raw.forEach(r => {
+    const key = JSON.stringify(Object.keys(r).sort().map(k => r[k]));
+    if (seen.has(key)){ removed++; }
+    else { seen.add(key); out.push(r); }
+  });
+  return { rows: out, removed };
+}
+
+function findKey(obj, candidates){
+  const keys = Object.keys(obj);
+  const norm = k => k.toLowerCase().replace(/[^a-z0-9]/g,'');
+  // pass 1: exact match on normalized header
+  for (const cand of candidates){
+    const hit = keys.find(k => norm(k) === cand);
+    if (hit) return hit;
+  }
+  // pass 2: fuzzy — normalized header contains the candidate (handles suffixes like "(Ad Manager)")
+  for (const cand of candidates){
+    const hit = keys.find(k => norm(k).includes(cand));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+// which: 'system' | 'video' | 'drr'. dedupeColumnHeader: optional raw header name to de-duplicate
+// rows by (keeps first row per unique value in that column) before summing — use when a
+// Campaign/Order ID repeats the same revenue figure across multiple line-item rows.
+function normalizeRows(raw, which, dedupeColumnHeader){
+  if (!raw.length) return { rows: [], diag: null };
+  const sample = raw[0];
+
+  let advKey, revKey, spocKey;
+  if (which === 'system'){
+    advKey = findKey(sample, ['advertisername','advertiser','client','brand']);
+    revKey = findKey(sample, ['adsrevenue','adrevenue','revenue','amount','value']);
+  } else if (which === 'video'){
+    advKey = findKey(sample, ['advertisername','advertiser','client','brand']);
+    revKey = findKey(sample, ['budgetspent','budget_spent','spend','amount','revenue','value']);
+  } else {
+    advKey = findKey(sample, ['advertisernameadmanager','advertisername','advertiser','client','brand']);
+    revKey = findKey(sample, ['totalbudgetdelivery','budgetdelivery','revenue','amount','value']);
+    spocKey = findKey(sample, ['codspoc','cod_spoc','spoc','spocname','owner']);
+  }
+
+  // Step 1: remove exact full-row duplicates (common CSV-export artifact)
+  const { rows: exactDeduped, removed: exactDupesRemoved } = dedupeExactRows(raw);
+
+  let working = exactDeduped;
+  const diag = { raw: raw.length, exactDupesRemoved, afterFilter: null, colDupesRemoved: 0, uniqueAdvertisers: null, totalRevenue: 0, revKeyUsed: revKey };
+
+  if (which === 'drr'){
+    // Filter to Product List === '1P' only
+    const prodKey = findKey(sample, ['productlist','product','producttype','productcategory']);
+    if (prodKey){
+      working = working.filter(r => normKey(r[prodKey]) === '1p');
+    }
+    diag.afterFilter = working.length;
+  }
+
+  // Optional: de-duplicate by a chosen ID column, keeping the first row per value.
+  // Applies to any sheet — a repeated per-campaign total across line items can happen
+  // in System/Video exports just as easily as in the DRR export.
+  if (dedupeColumnHeader && sample.hasOwnProperty(dedupeColumnHeader)){
+    const seenIds = new Set();
+    const before = working.length;
+    working = working.filter(r => {
+      const v = normKey(r[dedupeColumnHeader]);
+      if (!v) return true; // keep rows with a blank id as-is
+      if (seenIds.has(v)) return false;
+      seenIds.add(v);
+      return true;
+    });
+    diag.colDupesRemoved = before - working.length;
+  }
+
+  const rows = working.map(r => ({
+    spoc: (spocKey ? r[spocKey] : '') || '',
+    advertiser: (advKey ? r[advKey] : 'Unknown') || 'Unknown',
+    revenue: revKey ? (parseFloat(String(r[revKey]).replace(/[^0-9.-]/g,'')) || 0) : 0
+  }));
+
+  diag.uniqueAdvertisers = new Set(rows.map(r => normKey(r.advertiser))).size;
+  diag.totalRevenue = rows.reduce((a,r) => a + r.revenue, 0);
+
+  return { rows, diag };
+}
+
+function normKey(s){ return String(s).trim().toLowerCase(); }
+
+function setFileLabel(btnId, nameId, filename, cls){
+  document.getElementById(btnId).classList.add('filled', cls);
+  document.getElementById(nameId).textContent = filename;
+}
+
+let rawSysParsed = null, rawVideoParsed = null, rawDrrParsed = null; // full raw rows, all columns — kept for re-processing on dedupe changes
+let sysDiag = null, videoDiag = null, latestDrrDiag = null;
+let sysAdsRows = null;   // System Revenue sheet -> Ads_Revenue
+let videoRows = null;    // Video Revenue sheet -> budget_spent
+
+document.getElementById('sysFile').addEventListener('change', e => handleFile(e, 'system'));
+document.getElementById('videoFile').addEventListener('change', e => handleFile(e, 'video'));
+document.getElementById('drrFile').addEventListener('change', e => handleFile(e, 'drr'));
+document.getElementById('dedupeColSystem').addEventListener('change', () => { if (rawSysParsed) processSystem(); });
+document.getElementById('dedupeColVideo').addEventListener('change', () => { if (rawVideoParsed) processVideo(); });
+document.getElementById('dedupeColDrr').addEventListener('change', () => { if (rawDrrParsed) processDrr(); });
+
+// --- Load from backend (Apps Script Web App) — the backend reads Google Sheets using
+// its own (your) Google access and serves plain JSON. Loaded via a <script> tag (JSONP),
+// so this isn't subject to CORS blocking regardless of how the backend is hosted. ---
+
+let backendCallbackCounter = 0;
+function fetchFromBackend(baseUrl, sheetKey){
+  return new Promise((resolve, reject) => {
+    const cbName = '__backendCb' + (backendCallbackCounter++);
+    const script = document.createElement('script');
+    const timeout = setTimeout(() => { cleanup(); reject(new Error(`Timed out waiting for "${sheetKey}" — check the backend URL is correct and the deployment is live.`)); }, 15000);
+
+    function cleanup(){
+      clearTimeout(timeout);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    window[cbName] = function(resp){
+      cleanup();
+      try {
+        if (!resp || resp.status === 'error'){
+          throw new Error(`Backend error loading "${sheetKey}": ` + ((resp && resp.message) || 'unknown error'));
+        }
+        const rows = (resp.rows || []).map(row => {
+          const obj = {};
+          Object.keys(row).forEach(h => { obj[h] = String(row[h]).trim(); });
+          return obj;
+        });
+        resolve(rows);
+      } catch(err){ reject(err); }
+    };
+
+    const sep = baseUrl.includes('?') ? '&' : '?';
+    script.src = `${baseUrl}${sep}sheet=${encodeURIComponent(sheetKey)}&callback=${cbName}`;
+    script.onerror = () => { cleanup(); reject(new Error(`Could not reach the backend for "${sheetKey}" — check the URL and that the deployment is live.`)); };
+    document.body.appendChild(script);
+  });
+}
+
+document.getElementById('loadSheetsBtn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('gsheetStatus');
+  const btn = document.getElementById('loadSheetsBtn');
+  const backendUrl = document.getElementById('backendUrl').value.trim();
+
+  if (!backendUrl){
+    statusEl.textContent = 'Please paste your Apps Script Web App URL first.';
+    statusEl.style.color = 'var(--bad)';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Loading…';
+  statusEl.style.color = 'var(--ink-soft)';
+  statusEl.textContent = 'Fetching System, Video, and DRR data from the backend…';
+
+  try {
+    const [sysRaw, videoRaw, drrRaw] = await Promise.all([
+      fetchFromBackend(backendUrl, 'system'),
+      fetchFromBackend(backendUrl, 'video'),
+      fetchFromBackend(backendUrl, 'drr')
+    ]);
+
+    rawSysParsed = sysRaw;
+    populateDedupeSelect('dedupeColSystem', sysRaw);
+    processSystem();
+    setFileLabel('sysBtn','sysName', `${sysRaw.length} rows via backend`, 'filled');
+
+    rawVideoParsed = videoRaw;
+    populateDedupeSelect('dedupeColVideo', videoRaw);
+    processVideo();
+    setFileLabel('videoBtn','videoName', `${videoRaw.length} rows via backend`, 'filled');
+
+    rawDrrParsed = drrRaw;
+    populateDedupeSelect('dedupeColDrr', drrRaw);
+    processDrr();
+    setFileLabel('drrBtn','drrName', `${drrRaw.length} rows via backend`, 'filled');
+
+    updateStatus();
+    if (systemRows && drrRows) render();
+
+    const now = new Date();
+    statusEl.style.color = 'var(--good)';
+    statusEl.textContent = `Loaded successfully at ${now.toLocaleTimeString()}. Click Load Data again any time to refresh.`;
+  } catch (err){
+    statusEl.style.color = 'var(--bad)';
+    statusEl.textContent = 'Failed to load: ' + err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Load Data';
+  }
+});
+
+function handleFile(e, which){
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const raw = parseCSV(evt.target.result);
+    if (which === 'system'){
+      rawSysParsed = raw;
+      populateDedupeSelect('dedupeColSystem', raw);
+      processSystem();
+      setFileLabel('sysBtn','sysName', file.name, 'filled');
+    } else if (which === 'video'){
+      rawVideoParsed = raw;
+      populateDedupeSelect('dedupeColVideo', raw);
+      processVideo();
+      setFileLabel('videoBtn','videoName', file.name, 'filled');
+    } else {
+      rawDrrParsed = raw;
+      populateDedupeSelect('dedupeColDrr', raw);
+      processDrr();
+      setFileLabel('drrBtn','drrName', file.name, 'filled');
+    }
+    updateStatus();
+    if (systemRows && drrRows) render();
+  };
+  reader.readAsText(file);
+}
+
+// System Revenue = Ads_Revenue (Sheet1) combined with budget_spent (Video Revenue sheet).
+// Both are simple advertiser+revenue row lists, so concatenating them lets the existing
+// per-advertiser grouping in buildMapping() sum contributions from both sources naturally.
+function combineSystemRows(){
+  systemRows = [...(sysAdsRows || []), ...(videoRows || [])];
+  if (!sysAdsRows && !videoRows) systemRows = null;
+}
+
+function populateDedupeSelect(selectId, raw){
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = '<option value="">None (sum every row)</option>';
+  if (!raw.length) return;
+  const idLike = ['id','code','number','no','#'];
+  Object.keys(raw[0]).forEach(h => {
+    const opt = document.createElement('option');
+    opt.value = h; opt.textContent = h;
+    if (idLike.some(tag => h.toLowerCase().includes(tag))) opt.textContent += ' (likely ID)';
+    sel.appendChild(opt);
+  });
+}
+
+function processSystem(){
+  const dedupeColumnHeader = document.getElementById('dedupeColSystem').value || null;
+  const { rows, diag } = normalizeRows(rawSysParsed, 'system', dedupeColumnHeader);
+  sysAdsRows = rows;
+  sysDiag = diag;
+  combineSystemRows();
+  renderDiag();
+  if (systemRows && drrRows) render();
+}
+
+function processVideo(){
+  const dedupeColumnHeader = document.getElementById('dedupeColVideo').value || null;
+  const { rows, diag } = normalizeRows(rawVideoParsed, 'video', dedupeColumnHeader);
+  videoRows = rows;
+  videoDiag = diag;
+  combineSystemRows();
+  renderDiag();
+  if (systemRows && drrRows) render();
+}
+
+function processDrr(){
+  const dedupeColumnHeader = document.getElementById('dedupeColDrr').value || null;
+  const { rows, diag } = normalizeRows(rawDrrParsed, 'drr', dedupeColumnHeader);
+  drrRows = rows;
+  latestDrrDiag = diag;
+  renderDiag();
+  if (systemRows && drrRows) render();
+}
+
+function renderDiag(){
+  if (!sysDiag && !videoDiag && !latestDrrDiag) return;
+  document.getElementById('diagPanel').style.display = '';
+
+  if (sysDiag){
+    document.getElementById('diagSysRaw').textContent = sysDiag.raw.toLocaleString('en-IN');
+    const bits = [];
+    if (sysDiag.exactDupesRemoved) bits.push(`${sysDiag.exactDupesRemoved} exact`);
+    if (sysDiag.colDupesRemoved) bits.push(`${sysDiag.colDupesRemoved} by ID`);
+    document.getElementById('diagSysDupes').textContent = bits.length ? bits.join(' + ') : '0';
+    document.getElementById('diagSysTotal').textContent = fmtMoney(sysDiag.totalRevenue) + ` (${sysDiag.totalRevenue.toLocaleString('en-IN')})`;
+  }
+  if (videoDiag){
+    document.getElementById('diagVideoRaw').textContent = videoDiag.raw.toLocaleString('en-IN');
+    const bits = [];
+    if (videoDiag.exactDupesRemoved) bits.push(`${videoDiag.exactDupesRemoved} exact`);
+    if (videoDiag.colDupesRemoved) bits.push(`${videoDiag.colDupesRemoved} by ID`);
+    document.getElementById('diagVideoDupes').textContent = bits.length ? bits.join(' + ') : '0';
+    document.getElementById('diagVideoTotal').textContent = fmtMoney(videoDiag.totalRevenue) + ` (${videoDiag.totalRevenue.toLocaleString('en-IN')})`;
+  }
+  if (sysDiag || videoDiag){
+    const combined = (sysDiag ? sysDiag.totalRevenue : 0) + (videoDiag ? videoDiag.totalRevenue : 0);
+    document.getElementById('diagCombinedTotal').textContent = fmtMoney(combined) + ` (${combined.toLocaleString('en-IN')})`;
+  }
+  if (latestDrrDiag){
+    document.getElementById('diagDrrRaw').textContent = latestDrrDiag.raw.toLocaleString('en-IN');
+    const dupeBits = [];
+    if (latestDrrDiag.exactDupesRemoved) dupeBits.push(`${latestDrrDiag.exactDupesRemoved} exact`);
+    if (latestDrrDiag.colDupesRemoved) dupeBits.push(`${latestDrrDiag.colDupesRemoved} by ID`);
+    document.getElementById('diagDrrDupes').textContent = dupeBits.length ? dupeBits.join(' + ') : '0';
+    document.getElementById('diagDrr1p').textContent = (latestDrrDiag.afterFilter ?? '—').toLocaleString?.('en-IN') ?? latestDrrDiag.afterFilter;
+    document.getElementById('diagDrrAdv').textContent = latestDrrDiag.uniqueAdvertisers ?? '—';
+    document.getElementById('diagDrrTotal').textContent = fmtMoney(latestDrrDiag.totalRevenue) + ` (${latestDrrDiag.totalRevenue.toLocaleString('en-IN')})`;
+  }
+}
+
+function updateStatus(){
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  const parts = [];
+  parts.push(sysAdsRows ? `${sysAdsRows.length} Ads_Revenue rows` : 'Ads_Revenue missing');
+  parts.push(videoRows ? `${videoRows.length} Video rows` : 'Video Revenue missing');
+  parts.push(drrRows ? `${drrRows.length} DRR rows` : 'DRR missing');
+  if (sysAdsRows && videoRows && drrRows){
+    dot.classList.add('ready');
+    text.textContent = parts.join(' · ') + ' — loaded';
+  } else {
+    dot.classList.remove('ready');
+    text.textContent = parts.join(' · ');
+  }
+}
+
+function buildMapping(){
+  // FORWARD = System Revenue. Every unique advertiser is the base unit; we look up DRR revenue for it ONCE.
+  // Join key is Advertiser only — SPOC labels come exclusively from the DRR sheet's COD_SPOC column.
+  const drrIndex = new Map(); // advertiser -> { revenue, spocSet: Set, spoc: first-seen label }
+  drrRows.forEach(r => {
+    const key = normKey(r.advertiser);
+    if (!drrIndex.has(key)) drrIndex.set(key, { revenue:0, spocSet:new Set(), spoc:'' });
+    const entry = drrIndex.get(key);
+    entry.revenue += r.revenue;
+    const spocLabel = (r.spoc || '').trim();
+    if (spocLabel){
+      entry.spocSet.add(spocLabel);
+      if (!entry.spoc) entry.spoc = spocLabel;
+    }
+  });
+
+  // IMPORTANT: group System rows by advertiser BEFORE matching against DRR.
+  // System Revenue.csv typically has multiple rows per advertiser (per day/campaign/etc).
+  // If we matched DRR per raw row instead, the same DRR total would get re-added once
+  // per System row for that advertiser — inflating the DRR total by that row count.
+  const sysByAdvertiser = new Map(); // normalized advertiser -> { advertiser, system, rowCount }
+  systemRows.forEach(r => {
+    const key = normKey(r.advertiser);
+    if (!sysByAdvertiser.has(key)) sysByAdvertiser.set(key, { advertiser: r.advertiser, system:0, rowCount:0 });
+    const e = sysByAdvertiser.get(key);
+    e.system += r.revenue;
+    e.rowCount += 1;
+  });
+
+  const UNMAPPED_LABEL = 'Unmapped (no COD_SPOC match)';
+  const spocMap = new Map(); // spoc -> { system, drr, advertisers: Map(advertiser -> {system, drr, mapped, ambiguous}) }
+  const drrSeen = new Set();
+
+  sysByAdvertiser.forEach((sysEntry, key) => {
+    const drrEntry = drrIndex.has(key) ? drrIndex.get(key) : null;
+    const drrVal = drrEntry ? drrEntry.revenue : null;
+    const ambiguous = !!drrEntry && drrEntry.spocSet.size > 1;
+    const spocLabel = drrEntry && drrEntry.spoc ? drrEntry.spoc : UNMAPPED_LABEL;
+    if (drrEntry) drrSeen.add(key);
+
+    if (!spocMap.has(spocLabel)) spocMap.set(spocLabel, { system:0, drr:0, mappedCount:0, totalCount:0, advertisers: new Map() });
+    const s = spocMap.get(spocLabel);
+    s.system += sysEntry.system;
+    s.drr += (drrVal || 0);
+    s.totalCount += 1; // counts unique advertisers, not raw System rows
+    if (drrVal !== null) s.mappedCount += 1;
+
+    s.advertisers.set(sysEntry.advertiser, {
+      system: sysEntry.system,
+      drr: drrVal || 0,
+      mapped: drrVal !== null,
+      ambiguous
+    });
+  });
+
+  // unmapped DRR: advertiser present in DRR (1P), no matching System Revenue row at all
+  const unmappedAgg = new Map();
+  drrRows.forEach(r => {
+    const key = normKey(r.advertiser);
+    if (!drrSeen.has(key)){
+      if (!unmappedAgg.has(key)) unmappedAgg.set(key, {spoc:r.spoc || '(blank)', advertiser:r.advertiser, revenue:0});
+      unmappedAgg.get(key).revenue += r.revenue;
+    }
+  });
+
+  return { spocMap, unmapped: [...unmappedAgg.values()] };
+}
+
+function render(){
+  const { spocMap, unmapped } = buildMapping();
+
+  let totalSystem = 0, totalDrrMapped = 0, totalMappedRows = 0, totalRows = 0;
+  spocMap.forEach(s => {
+    totalSystem += s.system;
+    totalDrrMapped += s.drr;
+    totalMappedRows += s.mappedCount;
+    totalRows += s.totalCount;
+  });
+  const overallDev = totalSystem !== 0 ? ((totalDrrMapped - totalSystem) / totalSystem) * 100 : NaN;
+
+  document.getElementById('kSystem').textContent = fmtMoney(totalSystem);
+  document.getElementById('kDrr').textContent = fmtMoney(totalDrrMapped);
+  const devEl = document.getElementById('kDev');
+  devEl.textContent = fmtPct(overallDev);
+  const overallBand = devBand(overallDev);
+  devEl.classList.toggle('band-red', overallBand === 'red');
+  devEl.classList.toggle('band-green', overallBand === 'green');
+  document.getElementById('kMapped').textContent = `${totalMappedRows} / ${totalRows}`;
+
+  // table
+  const spocEntries = [...spocMap.entries()].sort((a,b) => b[1].system - a[1].system);
+  const tableHost = document.getElementById('tableHost');
+  if (!spocEntries.length){
+    tableHost.innerHTML = '<div class="empty">No System Revenue rows found.</div>';
+  } else {
+    let html = `<table><thead><tr>
+      <th>SPOC</th><th class="num">System Revenue</th><th class="num">DRR Revenue</th><th class="num">Deviation %</th><th class="num">Mapped</th>
+    </tr></thead><tbody>`;
+    spocEntries.forEach(([spoc, s], idx) => {
+      const dev = s.system !== 0 ? ((s.drr - s.system)/s.system)*100 : NaN;
+      const devClass = devBand(dev) ? 'dev-band-' + devBand(dev) : '';
+      html += `<tr class="spoc-row" data-idx="${idx}">
+        <td><span class="caret">▸</span>${escapeHtml(spoc)}</td>
+        <td class="num mono">${fmtMoney(s.system)}</td>
+        <td class="num mono">${fmtMoney(s.drr)}</td>
+        <td class="num mono ${devClass}">${fmtPct(dev)}</td>
+        <td class="num mono">${s.mappedCount}/${s.totalCount}</td>
+      </tr>`;
+      html += `<tr class="detail-row" data-idx="${idx}"><td colspan="5"><div class="detail-inner">
+        <table><thead><tr><th>Advertiser</th><th class="num">System Revenue</th><th class="num">DRR Revenue</th><th class="num">Deviation %</th><th>Status</th></tr></thead><tbody>`;
+      [...s.advertisers.entries()].sort((a,b)=>b[1].system-a[1].system).forEach(([adv, a]) => {
+        const adDev = a.system !== 0 ? ((a.drr - a.system)/a.system)*100 : NaN;
+        const adDevClass = devBand(adDev) ? 'dev-band-' + devBand(adDev) : '';
+        const statusBadge = !a.mapped
+          ? '<span class="badge unmapped">no DRR match</span>'
+          : (a.ambiguous ? '<span class="badge unmapped" title="Multiple COD_SPOC values found in DRR for this advertiser — first one used">mixed COD_SPOC</span>' : '');
+        html += `<tr><td>${escapeHtml(adv)}</td><td class="num mono">${fmtMoney(a.system)}</td>
+          <td class="num mono">${fmtMoney(a.drr)}</td><td class="num mono ${adDevClass}">${fmtPct(adDev)}</td>
+          <td>${statusBadge}</td></tr>`;
+      });
+      html += `</tbody></table></div></td></tr>`;
+    });
+    html += '</tbody></table>';
+    tableHost.innerHTML = html;
+
+    tableHost.querySelectorAll('tr.spoc-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const idx = row.dataset.idx;
+        row.classList.toggle('open');
+        tableHost.querySelector(`tr.detail-row[data-idx="${idx}"]`).classList.toggle('open');
+      });
+    });
+  }
+
+  // unmapped-in-DRR panel
+  const unmappedPanel = document.getElementById('unmappedPanel');
+  const unmappedHost = document.getElementById('unmappedHost');
+  if (unmapped.length){
+    unmappedPanel.style.display = '';
+    let uh = `<table><thead><tr><th>SPOC</th><th>Advertiser</th><th class="num">DRR Revenue</th></tr></thead><tbody>`;
+    unmapped.sort((a,b)=>b.revenue-a.revenue).forEach(u => {
+      uh += `<tr><td>${escapeHtml(u.spoc)}</td><td>${escapeHtml(u.advertiser)}</td><td class="num mono">${fmtMoney(u.revenue)}</td></tr>`;
+    });
+    uh += '</tbody></table>';
+    unmappedHost.innerHTML = uh;
+  } else {
+    unmappedPanel.style.display = 'none';
+  }
+
+  // charts (hand-built inline SVG — no external library / CDN dependency)
+  document.getElementById('chartsPanel').style.display = '';
+  const labels = spocEntries.map(([spoc]) => spoc);
+  const sysData = spocEntries.map(([,s]) => s.system);
+  const drrData = spocEntries.map(([,s]) => s.drr);
+  const devData = spocEntries.map(([,s]) => s.system !== 0 ? ((s.drr - s.system)/s.system)*100 : 0);
+
+  document.getElementById('revChart').innerHTML = svgGroupedRevenueChart(labels, sysData, drrData);
+  document.getElementById('devChart').innerHTML = svgDeviationChart(labels, devData);
+
+  // advertiser-level charts (flatten every SPOC's advertiser map, top 20 by System Revenue)
+  document.getElementById('chartsPanelAdv').style.display = '';
+  const allAdvertisers = [];
+  spocMap.forEach(s => {
+    s.advertisers.forEach((a, adv) => allAdvertisers.push({ advertiser: adv, system: a.system, drr: a.drr }));
+  });
+  const topAdvertisers = allAdvertisers.sort((a,b) => b.system - a.system).slice(0, 20);
+
+  const advLabels = topAdvertisers.map(a => a.advertiser);
+  const advSysData = topAdvertisers.map(a => a.system);
+  const advDrrData = topAdvertisers.map(a => a.drr);
+  const advDevData = topAdvertisers.map(a => a.system !== 0 ? ((a.drr - a.system)/a.system)*100 : 0);
+
+  document.getElementById('revChartAdv').innerHTML = svgGroupedRevenueChart(advLabels, advSysData, advDrrData);
+  document.getElementById('devChartAdv').innerHTML = svgDeviationChart(advLabels, advDevData);
+}
+
+// --- Hand-built inline SVG charts (no external library / CDN dependency) ---
+
+function niceMax(v){
+  if (v <= 0) return 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(v)));
+  const norm = v / mag;
+  const step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+  return step * mag;
+}
+
+function svgGroupedRevenueChart(labels, sysVals, drrVals){
+  if (!labels.length) return '<div class="empty">No data to chart.</div>';
+  const W = 900, H = 320, marginLeft = 74, marginTop = 16, marginRight = 16;
+  const longestLabel = Math.max(...labels.map(l => l.length));
+  const marginBottom = Math.min(140, 46 + longestLabel * 3.2);
+  const plotW = W - marginLeft - marginRight;
+  const plotH = H - marginTop - marginBottom;
+  const maxRaw = Math.max(1, ...sysVals, ...drrVals);
+  const maxVal = niceMax(maxRaw);
+  const n = labels.length;
+  const groupW = plotW / n;
+  const barW = Math.max(3, Math.min(22, groupW * 0.32));
+  const gap = Math.max(1, barW * 0.18);
+
+  const yFor = v => marginTop + plotH - (v / maxVal) * plotH;
+  const hFor = v => (v / maxVal) * plotH;
+
+  let bars = '';
+  labels.forEach((label, i) => {
+    const cx = marginLeft + i * groupW + groupW / 2;
+    const sx = cx - gap / 2 - barW;
+    const dx = cx + gap / 2;
+    const sv = sysVals[i] || 0, dv = drrVals[i] || 0;
+    bars += `<rect x="${sx.toFixed(1)}" y="${yFor(sv).toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(0,hFor(sv)).toFixed(1)}" fill="var(--system)" rx="2"><title>${escapeHtml(label)} — System: ${fmtMoney(sv)}</title></rect>`;
+    bars += `<rect x="${dx.toFixed(1)}" y="${yFor(dv).toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(0,hFor(dv)).toFixed(1)}" fill="var(--drr-soft)" stroke="var(--drr)" stroke-width="1.5" rx="2"><title>${escapeHtml(label)} — DRR: ${fmtMoney(dv)}</title></rect>`;
+    const labelY = marginTop + plotH + 14;
+    bars += `<text x="0" y="0" transform="translate(${cx.toFixed(1)},${labelY}) rotate(45)" font-size="10" fill="var(--ink-soft)" text-anchor="start">${escapeHtml(label.length > 22 ? label.slice(0,20)+'…' : label)}</text>`;
+  });
+
+  // gridlines + y-axis labels
+  let grid = '';
+  const steps = 4;
+  for (let s = 0; s <= steps; s++){
+    const val = maxVal * s / steps;
+    const y = yFor(val);
+    grid += `<line x1="${marginLeft}" y1="${y.toFixed(1)}" x2="${W-marginRight}" y2="${y.toFixed(1)}" stroke="#EEF1F5" stroke-width="1"/>`;
+    grid += `<text x="${marginLeft-8}" y="${(y+3).toFixed(1)}" font-size="10" fill="var(--ink-soft)" text-anchor="end">${fmtMoney(val)}</text>`;
+  }
+
+  const legend = `
+    <g transform="translate(${marginLeft},${H-6})">
+      <rect x="0" y="-9" width="10" height="10" fill="var(--system)" rx="2"></rect>
+      <text x="15" y="0" font-size="11" fill="var(--ink-soft)">System Revenue</text>
+      <rect x="140" y="-9" width="10" height="10" fill="var(--drr-soft)" stroke="var(--drr)" stroke-width="1.5" rx="2"></rect>
+      <text x="155" y="0" font-size="11" fill="var(--ink-soft)">DRR Revenue</text>
+    </g>`;
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%; height:auto; font-family:'Inter',sans-serif;">
+    ${grid}
+    <line x1="${marginLeft}" y1="${marginTop}" x2="${marginLeft}" y2="${marginTop+plotH}" stroke="var(--line)"/>
+    <line x1="${marginLeft}" y1="${marginTop+plotH}" x2="${W-marginRight}" y2="${marginTop+plotH}" stroke="var(--line)"/>
+    ${bars}
+    ${legend}
+  </svg>`;
+}
+
+function svgDeviationChart(labels, values){
+  if (!labels.length) return '<div class="empty">No data to chart.</div>';
+  const W = 900, H = 320, marginLeft = 60, marginTop = 16, marginRight = 16;
+  const longestLabel = Math.max(...labels.map(l => l.length));
+  const marginBottom = Math.min(140, 46 + longestLabel * 3.2);
+  const plotW = W - marginLeft - marginRight;
+  const plotH = H - marginTop - marginBottom;
+
+  const maxAbsRaw = Math.max(15, ...values.map(v => Math.abs(v)));
+  const maxAbs = niceMax(maxAbsRaw);
+  const zeroY = marginTop + plotH / 2;
+  const scale = (plotH / 2) / maxAbs;
+
+  const n = labels.length;
+  const groupW = plotW / n;
+  const barW = Math.max(3, Math.min(26, groupW * 0.5));
+
+  // shaded band for the ±15% "in band" reference zone
+  const bandTop = zeroY - 15 * scale;
+  const bandH = 15 * scale * 2;
+  const band = `<rect x="${marginLeft}" y="${bandTop.toFixed(1)}" width="${plotW.toFixed(1)}" height="${bandH.toFixed(1)}" fill="rgba(28,138,94,0.07)"/>`;
+
+  let bars = '';
+  labels.forEach((label, i) => {
+    const cx = marginLeft + i * groupW + groupW / 2;
+    const v = values[i] || 0;
+    const barH = Math.abs(v) * scale;
+    const y = v >= 0 ? zeroY - barH : zeroY;
+    const color = devBand(v) === 'green' ? 'var(--good)' : 'var(--bad)';
+    bars += `<rect x="${(cx-barW/2).toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(0,barH).toFixed(1)}" fill="${color}" rx="2" opacity="0.85"><title>${escapeHtml(label)}: ${fmtPct(v)}</title></rect>`;
+    const labelY = marginTop + plotH + 14;
+    bars += `<text x="0" y="0" transform="translate(${cx.toFixed(1)},${labelY}) rotate(45)" font-size="10" fill="var(--ink-soft)" text-anchor="start">${escapeHtml(label.length > 22 ? label.slice(0,20)+'…' : label)}</text>`;
+  });
+
+  // gridlines at -maxAbs, -15, 0, 15, +maxAbs (skip duplicates)
+  const gridVals = [...new Set([-maxAbs, -15, 0, 15, maxAbs])].sort((a,b)=>a-b);
+  let grid = '';
+  gridVals.forEach(val => {
+    const y = zeroY - val * scale;
+    grid += `<line x1="${marginLeft}" y1="${y.toFixed(1)}" x2="${W-marginRight}" y2="${y.toFixed(1)}" stroke="${val===0?'var(--line)':'#EEF1F5'}" stroke-width="${val===0?1.5:1}"/>`;
+    grid += `<text x="${marginLeft-8}" y="${(y+3).toFixed(1)}" font-size="10" fill="var(--ink-soft)" text-anchor="end">${val>0?'+':''}${val.toFixed(0)}%</text>`;
+  });
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%; height:auto; font-family:'Inter',sans-serif;">
+    ${band}
+    ${grid}
+    <line x1="${marginLeft}" y1="${marginTop}" x2="${marginLeft}" y2="${marginTop+plotH}" stroke="var(--line)"/>
+    ${bars}
+  </svg>`;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+</body>
+</html>
