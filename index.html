@@ -160,11 +160,11 @@
       </div>
       <div style="display:grid; grid-template-columns:150px 1fr; gap:10px; align-items:center;">
         <label style="font-size:12.5px; font-weight:600; color:var(--system);">Backend URL</label>
-        <input type="text" id="backendUrl" placeholder="https://script.google.com/macros/s/AKfycb.../exec" style="padding:8px 10px; border:1px solid var(--line); border-radius:6px; font-size:12.5px; font-family:'JetBrains Mono',monospace;">
+        <input type="text" id="backendUrl" placeholder="https://script.google.com/macros/s/AKfycb.../exec" value="https://script.google.com/a/macros/paytm.com/s/AKfycbxU841iKDYt6N0A80CZo00m6K6dH6nZt9f3zbEgcyA0eunTC0UqLR0ArhctJc2xvtR7/exec" style="padding:8px 10px; border:1px solid var(--line); border-radius:6px; font-size:12.5px; font-family:'JetBrains Mono',monospace;">
       </div>
       <div style="display:flex; align-items:center; gap:12px; margin-top:4px;">
         <button id="loadSheetsBtn" style="padding:9px 18px; border:none; border-radius:7px; background:var(--system); color:#fff; font-weight:600; font-size:13px; cursor:pointer;">Load Data</button>
-        <span id="gsheetStatus" style="font-size:12.5px; color:var(--ink-soft);">Paste your Apps Script Web App URL, then click Load Data.</span>
+        <span id="gsheetStatus" style="font-size:12.5px; color:var(--ink-soft);">Loading automatically…</span>
       </div>
 
     </div>
@@ -525,7 +525,7 @@ function fetchFromBackend(baseUrl, sheetKey){
   });
 }
 
-document.getElementById('loadSheetsBtn').addEventListener('click', async () => {
+async function loadFromBackend(){
   const statusEl = document.getElementById('gsheetStatus');
   const btn = document.getElementById('loadSheetsBtn');
   const backendUrl = document.getElementById('backendUrl').value.trim();
@@ -568,7 +568,7 @@ document.getElementById('loadSheetsBtn').addEventListener('click', async () => {
 
     const now = new Date();
     statusEl.style.color = 'var(--good)';
-    statusEl.textContent = `Loaded successfully at ${now.toLocaleTimeString()}. Click Load Data again any time to refresh.`;
+    statusEl.textContent = `Loaded successfully at ${now.toLocaleTimeString()}. Click Load Data any time to refresh.`;
   } catch (err){
     statusEl.style.color = 'var(--bad)';
     statusEl.textContent = 'Failed to load: ' + err.message;
@@ -576,7 +576,15 @@ document.getElementById('loadSheetsBtn').addEventListener('click', async () => {
     btn.disabled = false;
     btn.textContent = 'Load Data';
   }
-});
+}
+
+document.getElementById('loadSheetsBtn').addEventListener('click', loadFromBackend);
+
+// Auto-load on page open if a backend URL is already pre-filled, so anyone who opens
+// this page (e.g. via GitHub Pages) sees live data with no manual steps.
+if (document.getElementById('backendUrl').value.trim()){
+  loadFromBackend();
+}
 
 function handleFile(e, which){
   const file = e.target.files[0];
